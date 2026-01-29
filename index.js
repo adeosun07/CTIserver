@@ -26,9 +26,9 @@ import { testConnection } from "./db.js";
 // =============================================================================
 const requiredEnvs = [
   "DIALPAD_WEBHOOK_SECRET",
-  "CLIENT_ID",
-  "CLIENT_SECRET",
-  "REDIRECT_URI",
+  "DIALPAD_SANDBOX_CLIENT_ID",
+  "DIALPAD_SANDBOX_CLIENT_SECRET",
+  "DIALPAD_SANDBOX_REDIRECT_URI",
   "DB_USER",
   "DB_PASSWORD",
   "DB_NAME",
@@ -146,7 +146,7 @@ if (process.env.NODE_ENV === "production") {
   });
 
   // Validate REDIRECT_URI uses HTTPS in production
-  const redirectUri = process.env.REDIRECT_URI;
+  const redirectUri = process.env.DIALPAD_PROD_REDIRECT_URI;
   if (!redirectUri || !redirectUri.startsWith("https://")) {
     logger.error("FATAL: REDIRECT_URI must use HTTPS in production");
     console.error(

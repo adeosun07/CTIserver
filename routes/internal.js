@@ -28,6 +28,20 @@ const router = express.Router();
 router.use(internalAuth);
 
 // =============================================================================
+// APP MANAGEMENT ENDPOINTS
+// =============================================================================
+
+/**
+ * POST /internal/apps
+ * Create a new app with auto-generated UUID and initial API key
+ * Enables apps to self-register on first contact
+ *
+ * Body: { "name": "My App Name" }
+ * Returns: { app_id, api_key }
+ */
+router.post("/apps", apiKeyController.createApp_handler);
+
+// =============================================================================
 // API KEY MANAGEMENT ENDPOINTS
 // =============================================================================
 

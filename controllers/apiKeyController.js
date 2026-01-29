@@ -350,6 +350,79 @@ export async function getKeyAuditLog_handler(req, res) {
 }
 
 /**
+ * POST /internal/apps
+ * Create a new app record with auto-generated UUID and initial API key
+ * Enables apps to self-register on first contact
+ */
+export async function createApp_handler(req, res) {
+  const { name } = req.body;
+
+  // Validate input
+  if (!name || typeof name !== "string" || name.trim().length === 0) {
+    return res.status(400).json({
+      error: "Invalid request",
+      message: "name is required and must be a non-empty string",
+    });
+  }
+
+  try {
+    const { v4: uuidv4 } = await import("uuid");
+    const newAppId = uuidv4();
+    const newKeyPlain = generateApiKey();
+    const newKeyHash = await hashApiKey(newKeyPlain);
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // Insert new app
+      await client.query(
+        `INSERT INTO apps (id, name, api_key, is_active, created_at, updated_at)
+         VALUES ($1, $2, $3, true, now(), now())`,
+        [newAppId, name.trim(), newKeyHash],
+      );
+
+      // Log the creation
+      await client.query(
+        `INSERT INTO api_key_audit_log (app_id, action, new_key_hint)
+         VALUES ($1, $2, $3)`,
+        [newAppId, "created", getKeyHint(newKeyPlain)],
+      );
+
+      await client.query("COMMIT");
+
+      logger.info("New app created", {
+        app_id: newAppId,
+        app_name: name.trim(),
+      });
+
+      // Return app_id and initial API key ONCE
+      return res.status(201).json({
+        success: true,
+        message:
+          "App created successfully. Store the API key securely - it CANNOT be retrieved again.",
+        app_id: newAppId,
+        app_name: name.trim(),
+        api_key: newKeyPlain,
+        created_at: new Date().toISOString(),
+        warning:
+          "This is the ONLY time this API key will be displayed. Store it immediately in a secure location.",
+        usage:
+          "Include this app_id for account identification and the api_key in the 'x-app-api-key' header when making API requests",
+      });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    logger.error("App creation failed", { error: err.message });
+    return res.status(500).json({ error: "Failed to create app" });
+  }
+}
+
+/**
  * EXPORTED HELPER FUNCTIONS for use in other services
  * These should NOT be HTTP endpoints but are used internally
  */

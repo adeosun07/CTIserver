@@ -20,9 +20,10 @@ const REDIRECT_URIS = {
     "https://your-domain.com/auth/dialpad/callback",
 };
 
-const CLIENT_ID = process.env.DIALPAD_CLIENT_ID;
-const CLIENT_SECRET = process.env.DIALPAD_CLIENT_SECRET;
-const REDIRECT_URI = process.env.REDIRECT_URI;
+// Use sandbox or production credentials based on NODE_ENV
+const ENV = process.env.NODE_ENV === "production" ? "PROD" : "SANDBOX";
+const CLIENT_ID = process.env[`DIALPAD_${ENV}_CLIENT_ID`];
+const CLIENT_SECRET = process.env[`DIALPAD_${ENV}_CLIENT_SECRET`];
 const SCOPES =
   process.env.DIALPAD_SCOPES || "calls:list recordings_export offline_access";
 
@@ -223,12 +224,10 @@ export async function callback(req, res) {
         "Token response missing refresh_token (offline_access scope required)",
         { app_id, data },
       );
-      return res
-        .status(500)
-        .json({
-          error:
-            "Missing refresh token - ensure offline_access scope is approved",
-        });
+      return res.status(500).json({
+        error:
+          "Missing refresh token - ensure offline_access scope is approved",
+      });
     }
 
     if (token_type !== "bearer") {
