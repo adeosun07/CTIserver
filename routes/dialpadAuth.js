@@ -1,5 +1,9 @@
 import express from "express";
-import { connect, callback } from "../controllers/dialpadAuthController.js";
+import {
+  connect,
+  callback,
+  disconnect,
+} from "../controllers/dialpadAuthController.js";
 
 const router = express.Router();
 
@@ -8,5 +12,8 @@ router.get("/connect", connect);
 
 // OAuth callback endpoint
 router.get("/callback", callback);
+
+// Disconnect and revoke tokens
+router.post("/disconnect/:app_id", disconnect);
 
 export default router;

@@ -38,3 +38,5 @@ build/
 # Temporary files
 tmp/
 temp/
+
+*.md

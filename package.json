@@ -7,15 +7,20 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
     "axios": "^1.13.3",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
-    "crypto": "^1.0.1",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
     "express-session": "^1.19.0",
-    "pg": "^8.17.2"
+    "pg": "^8.17.2",
+    "uuid": "^13.0.0",
+    "ws": "^8.14.0"
   }
 }

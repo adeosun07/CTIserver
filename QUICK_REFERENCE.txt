@@ -1,0 +1,187 @@
+╔═══════════════════════════════════════════════════════════════╗
+║         WEBHOOK EVENT PROCESSING - QUICK REFERENCE           ║
+╚═══════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🚀 GETTING STARTED                                          │
+└─────────────────────────────────────────────────────────────┘
+
+1. Run Migration:
+   psql -U user -d database -f migrations/001_webhook_processing.sql
+
+2. Start Server:
+   npm start
+   → Processor starts automatically (polls every 5s)
+
+3. Test (Optional):
+   node scripts/generateTestEvents.js
+   node scripts/processEvents.js stats
+
+┌─────────────────────────────────────────────────────────────┐
+│ 📁 NEW FILES                                                │
+└─────────────────────────────────────────────────────────────┘
+
+migrations/
+  └─ 001_webhook_processing.sql       → DB schema updates
+
+services/
+  ├─ dialpadEventProcessor.js         → Core processing engine
+  └─ callEventHandlers.js             → Call event handlers
+
+scripts/
+  ├─ processEvents.js                 → Manual process/stats
+  └─ generateTestEvents.js            → Test data generator
+
+docs/
+  ├─ README_WEBHOOK_PROCESSING.md     → Quick start
+  ├─ WEBHOOK_PROCESSING_GUIDE.md      → Full guide
+  └─ IMPLEMENTATION_SUMMARY.md        → What was built
+
+Updated:
+  └─ index.js                         → Processor initialization
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🎯 SUPPORTED EVENTS                                         │
+└─────────────────────────────────────────────────────────────┘
+
+call.ring                → Insert/update: status='ringing'
+call.started             → Insert/update: status='active'
+call.ended               → Update: status='ended', ended_at
+call.recording.completed → Update: recording_url
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🔧 USEFUL COMMANDS                                          │
+└─────────────────────────────────────────────────────────────┘
+
+# View stats
+node scripts/processEvents.js stats
+
+# Manual processing
+node scripts/processEvents.js process
+
+# Generate test data
+node scripts/generateTestEvents.js
+
+# Check unprocessed events (SQL)
+SELECT event_type, COUNT(*) 
+FROM webhook_events 
+WHERE processed_at IS NULL 
+GROUP BY event_type;
+
+# View recent calls (SQL)
+SELECT dialpad_call_id, status, from_number, to_number, started_at
+FROM calls 
+ORDER BY created_at DESC 
+LIMIT 10;
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🏗️ ARCHITECTURE                                             │
+└─────────────────────────────────────────────────────────────┘
+
+Dialpad Webhook
+       ↓
+webhookController.js (verify signature)
+       ↓
+webhook_events table (processed_at = NULL)
+       ↓
+dialpadEventProcessor.js (polls every 5s)
+       ↓
+Event Router (by event_type)
+       ↓
+callEventHandlers.js
+       ↓
+calls table (UPSERT on dialpad_call_id)
+       ↓
+processed_at = now()
+
+┌─────────────────────────────────────────────────────────────┐
+│ ➕ ADDING NEW EVENT TYPES                                   │
+└─────────────────────────────────────────────────────────────┘
+
+1. Create handler:
+   async function handleMyEvent(payload, app_id) {
+     // Your logic here
+   }
+
+2. Register it:
+   import { registerEventHandler } from './dialpadEventProcessor.js';
+   registerEventHandler('my.event', handleMyEvent);
+
+3. Add to index.js startup:
+   registerCallHandlers();
+   registerMyHandlers(); // ← Add this
+
+┌─────────────────────────────────────────────────────────────┐
+│ 🐛 TROUBLESHOOTING                                          │
+└─────────────────────────────────────────────────────────────┘
+
+Events not processing?
+  → Check logs for "[EventProcessor]" messages
+  → Run: node scripts/processEvents.js stats
+  → Verify migration was run
+
+Processing lag?
+  → Check: node scripts/processEvents.js stats
+  → Manually process: node scripts/processEvents.js process
+  → Adjust intervalMs in index.js
+
+Failed events?
+  → Check logs for error messages
+  → Fix underlying issue
+  → Events auto-retry on next poll
+
+┌─────────────────────────────────────────────────────────────┐
+│ 📊 MONITORING                                               │
+└─────────────────────────────────────────────────────────────┘
+
+Watch logs for:
+  [EventProcessor] Processed: X, Failed: Y
+  [CallHandler] call.started processed: 123456
+
+Periodic checks:
+  node scripts/processEvents.js stats
+
+Set up alerts if:
+  unprocessed count > 100 (processing lag)
+  failed count > 0 (errors occurred)
+
+┌─────────────────────────────────────────────────────────────┐
+│ ⚙️ CONFIGURATION                                            │
+└─────────────────────────────────────────────────────────────┘
+
+File: index.js
+
+const stopProcessor = startEventProcessor({
+  intervalMs: 5000,  // How often to check (ms)
+  batchSize: 50      // Events per batch
+});
+
+Recommendations:
+  Low volume:   intervalMs: 10000-30000
+  Medium:       intervalMs: 5000 (default)
+  High volume:  Consider message queue
+
+┌─────────────────────────────────────────────────────────────┐
+│ ✅ SUCCESS CHECKLIST                                        │
+└─────────────────────────────────────────────────────────────┘
+
+□ Migration executed successfully
+□ Server starts without errors
+□ Logs show "Webhook event processor started"
+□ Logs show "[CallHandlers] Registered"
+□ Test events process within 5 seconds
+□ processed_at column populated after processing
+□ calls table shows correct data
+□ Stats show unprocessed count decreasing
+
+┌─────────────────────────────────────────────────────────────┐
+│ 📚 DOCUMENTATION                                            │
+└─────────────────────────────────────────────────────────────┘
+
+Quick Start:      README_WEBHOOK_PROCESSING.md
+Detailed Guide:   WEBHOOK_PROCESSING_GUIDE.md
+Implementation:   IMPLEMENTATION_SUMMARY.md
+
+╔═══════════════════════════════════════════════════════════════╗
+║  Ready to go! Run the migration and restart your server. 🚀  ║
+╚═══════════════════════════════════════════════════════════════╝
