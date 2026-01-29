@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import pool from "../db.js";
 import { logger } from "../utils/logger.js";
+import { validateApiKey } from "./apiKeyController.js";
 
 // Header names and secret env var
 const SIGNATURE_HEADER =
@@ -102,15 +103,21 @@ export async function handleDialpadWebhook(req, res) {
       if (appApiKey) {
         try {
           const r = await pool.query(
-            "SELECT id FROM apps WHERE api_key = $1 LIMIT 1",
-            [appApiKey],
+            `SELECT id, api_key, is_active
+             FROM apps
+             WHERE api_key IS NOT NULL AND is_active = true`,
           );
-          if (r.rowCount > 0) {
-            app_id = r.rows[0].id;
-          } else {
-            logger.warn("Webhook rejected - unknown API key", {
-              ip: req.ip,
-            });
+
+          for (const app of r.rows) {
+            const isValid = await validateApiKey(appApiKey, app.api_key);
+            if (isValid) {
+              app_id = app.id;
+              break;
+            }
+          }
+
+          if (!app_id) {
+            logger.warn("Webhook rejected - unknown API key", { ip: req.ip });
           }
         } catch (err) {
           logger.error("DB error resolving app by API key", {
@@ -118,6 +125,14 @@ export async function handleDialpadWebhook(req, res) {
           });
         }
       }
+    }
+
+    if (!app_id) {
+      logger.warn("Webhook rejected - unable to resolve app", {
+        ip: req.ip,
+        dialpad_org_id,
+      });
+      return res.status(401).json({ error: "Unknown or unauthorized app" });
     }
 
     const eventType =

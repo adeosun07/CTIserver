@@ -37,6 +37,7 @@ CREATE TABLE calls (
   ended_at TIMESTAMP,
   duration_seconds INTEGER,
   recording_url TEXT,
+  raw_payload JSONB,
   created_at TIMESTAMP DEFAULT now()
 );
 CREATE TABLE messages (

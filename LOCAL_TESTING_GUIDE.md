@@ -323,11 +323,14 @@ This tests the webhook signature verification with the fixed API key authenticat
 
 - Key: `x-dialpad-signature`
 - Value: `{{signature}}`
+- Key: `x-app-api-key`
+- Value: `{{apiKey}}`
 
 **Body (JSON):**
 
 ```json
 {
+  "event_type": "call.ring",
   "call": {
     "id": 999999,
     "direction": "inbound",
@@ -363,8 +366,7 @@ console.log("✓ Generated signature: " + signature.substring(0, 20) + "...");
 
 ```json
 {
-  "success": true,
-  "message": "Webhook processed successfully"
+  "received": true
 }
 ```
 
@@ -451,10 +453,12 @@ LIMIT 1;
    - Verify success response
 
 5. **Webhook**
-   - Click "Send"
-   - Verify `success: true`
-   - Open PgAdmin/psql and run the SQL query from Step 3.5
-   - Confirm call record exists with `dialpad_call_id = 999999`
+
+- Click "Send"
+- Verify `received: true`
+- Wait ~5 seconds for the event processor to pick up the event
+- Open PgAdmin/psql and run the SQL query from Step 3.5
+- Confirm call record exists with `dialpad_call_id = 999999`
 
 6. **Get Active Calls**
    - Click "Send"
@@ -568,8 +572,9 @@ VALUES (
 
 **Causes:**
 
-1. App ID in webhook doesn't match app in database
-2. Webhook processor failed to insert
+1. `event_type` missing or not one of `call.started`, `call.ring`, `call.ended`
+2. `x-app-api-key` header missing (and no `dialpad_org_id` mapping)
+3. Event processor hasn’t run yet (polls every 5 seconds)
 
 **Debugging:**
 
