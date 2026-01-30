@@ -292,7 +292,7 @@ This maps a Dialpad user to a CRM user for context in calls.
 
 ```json
 {
-  "dialpad_user_id": 12345,
+  "dialpad_user_id": 12345,  
   "crm_user_id": "crm_user_001"
 }
 ```
