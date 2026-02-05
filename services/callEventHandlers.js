@@ -56,6 +56,101 @@ function extractCallDetails(payload) {
 }
 
 /**
+ * Normalize message direction from raw value or event type
+ * @param {string|null} direction
+ * @param {string} eventType
+ * @returns {string|null}
+ */
+function normalizeMessageDirection(direction, eventType) {
+  if (direction) {
+    const normalized = String(direction).toLowerCase().trim();
+    if (["inbound", "incoming", "in"].includes(normalized)) return "inbound";
+    if (["outbound", "outgoing", "out"].includes(normalized)) return "outbound";
+  }
+
+  const evt = String(eventType || "").toLowerCase();
+  if (evt.includes("received") || evt.includes("inbound")) return "inbound";
+  if (evt.includes("sent") || evt.includes("outbound")) return "outbound";
+
+  return null;
+}
+
+/**
+ * Extract message details from Dialpad webhook payload
+ * Handles various payload structures from different event types
+ */
+function extractMessageDetails(payload, eventType) {
+  const message =
+    payload.message || payload.data?.message || payload.sms || payload;
+
+  const rawDirection =
+    message.direction || payload.direction || payload.sms_direction;
+  const normalizedDirection = normalizeMessageDirection(
+    rawDirection,
+    eventType,
+  );
+
+  return {
+    dialpad_message_id:
+      message.id || message.message_id || payload.message_id || payload.id,
+    direction: normalizedDirection,
+    from_number:
+      message.from || message.from_number || message.sender || payload.from,
+    to_number:
+      message.to || message.to_number || message.recipient || payload.to,
+    text: message.text || message.body || message.message || payload.text,
+    dialpad_user_id:
+      message.user_id || message.dialpad_user_id || message.owner?.id,
+    sent_at:
+      message.sent_at ||
+      message.timestamp ||
+      message.created_at ||
+      payload.time,
+  };
+}
+
+/**
+ * Handler: sms/message events
+ * Creates or updates a message record
+ */
+async function handleMessageEvent(payload, app_id, eventType) {
+  const details = extractMessageDetails(payload, eventType);
+
+  if (!details.dialpad_message_id) {
+    console.warn(`${eventType} event missing dialpad_message_id`);
+    return;
+  }
+
+  await pool.query(
+    `INSERT INTO messages (
+       app_id, dialpad_message_id, direction, from_number,
+       to_number, text, dialpad_user_id, sent_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (dialpad_message_id) DO UPDATE SET
+       direction = COALESCE(EXCLUDED.direction, messages.direction),
+       from_number = COALESCE(EXCLUDED.from_number, messages.from_number),
+       to_number = COALESCE(EXCLUDED.to_number, messages.to_number),
+       text = COALESCE(EXCLUDED.text, messages.text),
+       dialpad_user_id = COALESCE(EXCLUDED.dialpad_user_id, messages.dialpad_user_id),
+       sent_at = COALESCE(EXCLUDED.sent_at, messages.sent_at)`,
+    [
+      app_id,
+      details.dialpad_message_id,
+      details.direction,
+      details.from_number,
+      details.to_number,
+      details.text,
+      details.dialpad_user_id,
+      details.sent_at,
+    ],
+  );
+
+  console.log(
+    `[MessageHandler] ${eventType} processed: ${details.dialpad_message_id}`,
+  );
+}
+
+/**
  * Handler: call.started
  * Creates or updates a call record with status = 'active'
  *
@@ -457,6 +552,67 @@ async function handleVoicemailReceived(payload, app_id) {
       voicemailData,
     );
 
+    // Update call status to voicemail when possible
+    if (voicemailData.dialpad_call_id) {
+      const nextStatus = "voicemail";
+      const existingCall = await pool.query(
+        `SELECT status FROM calls WHERE dialpad_call_id = $1 AND app_id = $2`,
+        [voicemailData.dialpad_call_id, app_id],
+      );
+
+      if (existingCall.rowCount > 0) {
+        const currentStatus = existingCall.rows[0].status;
+        if (!isValidStatusTransition(currentStatus, nextStatus)) {
+          console.warn(
+            `[CallHandler] ${getStatusTransitionError(currentStatus, nextStatus)} for call ${voicemailData.dialpad_call_id}`,
+          );
+        } else {
+          await pool.query(
+            `UPDATE calls SET
+               status = $1,
+               is_voicemail = true,
+               voicemail_audio_url = $2,
+               voicemail_transcript = $3
+             WHERE dialpad_call_id = $4 AND app_id = $5`,
+            [
+              nextStatus,
+              voicemailData.recording_url,
+              voicemailData.transcript,
+              voicemailData.dialpad_call_id,
+              app_id,
+            ],
+          );
+        }
+      } else {
+        const sanitizedPayload = sanitizeCallPayload(payload);
+        await pool.query(
+          `INSERT INTO calls (
+             app_id, dialpad_call_id, direction, from_number, to_number,
+             status, dialpad_user_id, is_voicemail, voicemail_audio_url,
+             voicemail_transcript, raw_payload
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10)
+           ON CONFLICT (dialpad_call_id) DO UPDATE SET
+             status = EXCLUDED.status,
+             is_voicemail = true,
+             voicemail_audio_url = COALESCE(EXCLUDED.voicemail_audio_url, calls.voicemail_audio_url),
+             voicemail_transcript = COALESCE(EXCLUDED.voicemail_transcript, calls.voicemail_transcript),
+             raw_payload = EXCLUDED.raw_payload`,
+          [
+            app_id,
+            voicemailData.dialpad_call_id,
+            null,
+            voicemailData.from_number,
+            voicemailData.to_number,
+            nextStatus,
+            voicemailData.dialpad_user_id,
+            voicemailData.recording_url,
+            voicemailData.transcript,
+            sanitizedPayload,
+          ],
+        );
+      }
+    }
+
     console.log(`[CallHandler] voicemail.received processed: ${vmRecord.id}`);
 
     // Broadcast to specific user who received the voicemail
@@ -499,6 +655,24 @@ export function registerCallHandlers() {
   );
   registerEventHandler("voicemail.received", handleVoicemailReceived);
   registerEventHandler("call.voicemail", handleVoicemailReceived); // Alternative event name
+
+  // SMS / Message events
+  const messageEvents = [
+    "sms.received",
+    "sms.sent",
+    "sms.delivered",
+    "message.received",
+    "message.sent",
+    "message.delivered",
+    "message.inbound",
+    "message.outbound",
+  ];
+
+  messageEvents.forEach((eventType) => {
+    registerEventHandler(eventType, (payload, app_id) =>
+      handleMessageEvent(payload, app_id, eventType),
+    );
+  });
 
   console.log("[CallHandlers] Registered call event handlers");
 }

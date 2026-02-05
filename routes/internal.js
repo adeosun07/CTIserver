@@ -19,6 +19,7 @@ import { internalAuth } from "../middleware/internalAuth.js";
 import * as apiKeyController from "../controllers/apiKeyController.js";
 import * as voicemailController from "../controllers/voicemailController.js";
 import * as userMappingController from "../controllers/userMappingController.js";
+import * as webhookManagementController from "../controllers/webhookManagementController.js";
 
 const router = express.Router();
 
@@ -193,6 +194,51 @@ router.delete(
 router.post(
   "/apps/:app_id/users/batch-map",
   userMappingController.batchMapUsers_handler,
+);
+
+// =============================================================================
+// WEBHOOK MANAGEMENT ENDPOINTS
+// =============================================================================
+
+/**
+ * POST /internal/webhooks/create?app_id=<app_id>
+ * Automatically create a webhook in Dialpad using the app's stored access token
+ *
+ * Query: app_id (required)
+ * Body (optional):
+ * {
+ *   "webhook_url": "https://your-domain.com/webhooks/dialpad",
+ *   "webhook_secret": "your-secret"
+ * }
+ *
+ * If not provided, uses DIALPAD_PROD_REDIRECT_URI env and DIALPAD_WEBHOOK_SECRET
+ */
+router.post(
+  "/webhooks/create",
+  webhookManagementController.createWebhookInDialpad,
+);
+
+/**
+ * GET /internal/webhooks?app_id=<app_id>
+ * List all webhooks registered for an app
+ */
+router.get("/webhooks", webhookManagementController.listWebhooks);
+
+/**
+ * GET /internal/webhooks/:webhook_id
+ * Get details of a specific webhook
+ */
+router.get("/webhooks/:webhook_id", webhookManagementController.getWebhook);
+
+/**
+ * DELETE /internal/webhooks/:webhook_id
+ * Delete webhook metadata from the database
+ * Note: This only removes the local record. You must also delete the webhook
+ * on Dialpad's end using their API.
+ */
+router.delete(
+  "/webhooks/:webhook_id",
+  webhookManagementController.removeWebhook,
 );
 
 export default router;

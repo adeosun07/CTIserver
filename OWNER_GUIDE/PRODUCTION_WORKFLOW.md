@@ -59,7 +59,7 @@ Save these values in your backend's secure configuration:
 ```env
 CTI_APP_ID=550e8400-e29b-41d4-a716-446655440000
 CTI_API_KEY=raw_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6
-CTI_SERVER_URL=https://your-cti-server.com
+DIALPAD_PROD_REDIRECT_URI=https://your-cti-server.com
 ```
 
 ---
@@ -107,7 +107,7 @@ Your backend redirects the user to the authorize endpoint:
 // Your backend (Node.js example)
 app.get("/connect-dialpad", (req, res) => {
   const app_id = process.env.CTI_APP_ID;
-  const authorizeUrl = `${process.env.CTI_SERVER_URL}/authorize?app_id=${app_id}`;
+  const authorizeUrl = `${process.env.DIALPAD_PROD_REDIRECT_URI}/authorize?app_id=${app_id}`;
   res.redirect(authorizeUrl);
 });
 ```
@@ -241,7 +241,7 @@ Dialpad sends real-time call events to your CTI Server via webhooks. Your backen
       "user_id": 555,
       "created_at": "2024-01-01T12:00:00Z"
     }
-  } 
+  }
 }
 ```
 

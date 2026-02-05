@@ -8,6 +8,7 @@ import session from "express-session";
 import dialpadAuthRouter from "./routes/dialpadAuth.js";
 import webhooksRouter from "./routes/webhooks.js";
 import callsRouter from "./routes/calls.js";
+import messagesRouter from "./routes/messages.js";
 import internalRouter from "./routes/internal.js";
 
 // Import event processing
@@ -69,6 +70,7 @@ app.use(
     },
   }),
 );
+
 // Capture raw body for webhook signature verification while still parsing JSON.
 app.use(
   express.json({
@@ -77,6 +79,17 @@ app.use(
     },
   }),
 );
+
+// Handle Dialpad JWT webhooks (content-type: application/jwt)
+app.use(
+  express.text({
+    type: "application/jwt",
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  }),
+);
+
 app.use(express.urlencoded({ extended: true }));
 
 // Request logging middleware
@@ -205,6 +218,9 @@ app.use("/webhooks", webhookLimiter, webhooksRouter);
 
 // Calls API (read-only, API key authenticated, rate limited)
 app.use("/api/calls", apiLimiter, callsRouter);
+
+// Messages API (read-only, API key authenticated, rate limited)
+app.use("/api/messages", apiLimiter, messagesRouter);
 
 // Internal routes (protected by auth + rate limited)
 app.use("/internal", internalLimiter, internalRouter);

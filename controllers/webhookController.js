@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import pool from "../db.js";
 import { logger } from "../utils/logger.js";
 import { validateApiKey } from "./apiKeyController.js";
+import { storeWebhookMetadata } from "../services/webhookService.js";
 
 // Header names and secret env var
 const SIGNATURE_HEADER =
@@ -42,31 +43,122 @@ function verifySignature(rawBody, signature) {
   }
 }
 
+/**
+ * Verify Dialpad JWT signature (HS256)
+ * JWT signature = base64url(HMAC_SHA256(secret, header.payload))
+ */
+function verifyJwtSignature(jwtToken) {
+  if (!WEBHOOK_SECRET || !jwtToken) {
+    return { valid: false, reason: "missing_secret_or_token" };
+  }
+
+  const parts = jwtToken.split(".");
+  if (parts.length !== 3) {
+    return { valid: false, reason: "invalid_format" };
+  }
+
+  const [headerB64, payloadB64, signatureB64] = parts;
+  const signingInput = `${headerB64}.${payloadB64}`;
+
+  const expected = crypto
+    .createHmac("sha256", WEBHOOK_SECRET)
+    .update(signingInput)
+    .digest();
+
+  let received;
+  try {
+    received = Buffer.from(signatureB64, "base64url");
+  } catch {
+    try {
+      received = Buffer.from(signatureB64, "base64");
+    } catch {
+      return { valid: false, reason: "invalid_signature_encoding" };
+    }
+  }
+
+  if (received.length !== expected.length) {
+    return { valid: false, reason: "signature_length_mismatch" };
+  }
+
+  const match = crypto.timingSafeEqual(expected, received);
+  return { valid: match, reason: match ? null : "signature_mismatch" };
+}
+
 export async function handleDialpadWebhook(req, res) {
   try {
-    const signature =
-      req.headers[SIGNATURE_HEADER] || req.headers["x-signature"];
+    // Handle JWT payload from Dialpad
+    let payload = {};
     const rawBody = req.rawBody;
+    let isJWT = false;
 
-    /**
-     * ENFORCE signature verification - mandatory for security
-     * Prevents unauthorized webhook injection
-     */
-    if (!verifySignature(rawBody, signature)) {
-      logger.warn("Webhook rejected - invalid signature", {
-        ip: req.ip,
-        signature_header: SIGNATURE_HEADER,
-      });
-      return res.status(401).json({ error: "Invalid webhook signature" });
+    if (req.headers["content-type"] === "application/jwt") {
+      isJWT = true;
+      const jwtToken =
+        typeof req.body === "string" ? req.body : req.rawBody.toString("utf8");
+
+      const jwtCheck = verifyJwtSignature(jwtToken);
+      if (!jwtCheck.valid) {
+        logger.warn("JWT signature verification failed", {
+          reason: jwtCheck.reason,
+        });
+        return res.status(401).json({ error: "Invalid JWT signature" });
+      }
+
+      try {
+        // JWT is base64url encoded: header.payload.signature
+        const parts = jwtToken.split(".");
+        if (parts.length === 3) {
+          // Decode the payload (middle part)
+          const payloadBase64 = parts[1];
+          const payloadJson = Buffer.from(payloadBase64, "base64url").toString(
+            "utf8",
+          );
+          payload = JSON.parse(payloadJson);
+
+          logger.info("JWT webhook received", {
+            state: payload.state,
+            call_id: payload.call_id,
+            direction: payload.direction,
+          });
+
+          logger.info("JWT signature verified successfully");
+        } else {
+          logger.warn("Invalid JWT format - expected 3 parts", {
+            parts: parts.length,
+          });
+          return res.status(400).json({ error: "Invalid JWT format" });
+        }
+      } catch (err) {
+        logger.error("Failed to decode JWT", { error: err.message });
+        return res.status(400).json({ error: "Invalid JWT format" });
+      }
+    } else {
+      // Standard JSON payload
+      payload = req.body || {};
+
+      // For non-JWT, verify signature via header
+      const signature =
+        req.headers[SIGNATURE_HEADER] || req.headers["x-signature"];
+
+      if (!verifySignature(rawBody, signature)) {
+        logger.warn("Webhook rejected - invalid signature", {
+          ip: req.ip,
+          signature_header: SIGNATURE_HEADER,
+        });
+        return res.status(401).json({ error: "Invalid webhook signature" });
+      }
     }
-
-    const payload = req.body || {};
 
     /**
      * Extract Dialpad org id from payload (multiple fallbacks)
+     * JWT webhooks may have it in target.office_id or other locations
      */
     const dialpad_org_id =
-      payload.organization_id || payload.org_id || payload.company?.id || null;
+      payload.organization_id ||
+      payload.org_id ||
+      payload.company?.id ||
+      payload.target?.office_id ||
+      null;
 
     /**
      * Resolve app_id via dialpad_connections
@@ -135,11 +227,17 @@ export async function handleDialpadWebhook(req, res) {
       return res.status(401).json({ error: "Unknown or unauthorized app" });
     }
 
+    // Extract event type - JWT webhooks use "state", others use "event_type"
     const eventType =
-      payload.event_type || payload.type || req.headers["x-event-type"] || null;
+      payload.state ||
+      payload.event_type ||
+      payload.type ||
+      req.headers["x-event-type"] ||
+      null;
 
+    // Dialpad JWT webhooks use call_id as the unique identifier
     const dialpadEventId =
-      payload.id || payload.event_id || payload.uuid || null;
+      payload.call_id || payload.id || payload.event_id || payload.uuid || null;
 
     logger.info("Webhook received and verified", {
       app_id,
@@ -149,6 +247,18 @@ export async function handleDialpadWebhook(req, res) {
     });
 
     try {
+      // Store webhook metadata if present in payload
+      try {
+        await storeWebhookMetadata(app_id, payload);
+      } catch (err) {
+        logger.warn("Could not store webhook metadata", {
+          error: err.message,
+          webhook_id: payload.webhook_id,
+        });
+        // Don't fail the entire request if metadata storage fails
+      }
+
+      // Persist webhook event to processing queue
       await pool.query(
         `INSERT INTO webhook_events (app_id, event_type, dialpad_event_id, payload)
          VALUES ($1, $2, $3, $4)

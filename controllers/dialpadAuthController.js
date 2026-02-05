@@ -26,6 +26,7 @@ const CLIENT_ID = process.env[`DIALPAD_${ENV}_CLIENT_ID`];
 const CLIENT_SECRET = process.env[`DIALPAD_${ENV}_CLIENT_SECRET`];
 const SCOPES =
   process.env.DIALPAD_SCOPES || "calls:list recordings_export offline_access";
+const STATIC_API_KEY = process.env.DIALPAD_API_KEY;
 
 function getEnvName() {
   return process.env.NODE_ENV === "production" ? "production" : "sandbox";
@@ -473,6 +474,7 @@ export async function getValidAccessToken(
   app_id,
   opts = { refreshWindowSeconds: 60 },
 ) {
+  if (STATIC_API_KEY) return STATIC_API_KEY;
   if (!app_id) throw new Error("Missing app_id");
 
   const r = await pool.query(

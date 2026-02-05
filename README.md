@@ -6,7 +6,31 @@ A production-ready, multi-tenant Node.js server that bridges your internal syste
 
 ---
 
-## 🚀 Quick Start
+## � Documentation
+
+**For complete production setup and integration guide, start here:**
+
+### 🔴 **[COMPLETE_FEATURE_SUMMARY.md](COMPLETE_FEATURE_SUMMARY.md)** ← START HERE
+
+Everything you need to know: app creation, API key generation, webhook automation, event subscriptions, JWT verification.
+
+### 🟠 **[PRODUCTION_DEPLOYMENT_GUIDE.md](PRODUCTION_DEPLOYMENT_GUIDE.md)**
+
+Step-by-step guide to deploy to Render with complete checklist and troubleshooting.
+
+### 🟡 **[WEBHOOK_CREATION_FLOW.md](WEBHOOK_CREATION_FLOW.md)**
+
+Deep dive into how webhooks are created automatically and OAuth flow explanation.
+
+### Other Guides
+
+- [OWNER_GUIDE/INTEGRATION_ARCHITECTURE.md](OWNER_GUIDE/INTEGRATION_ARCHITECTURE.md) - System architecture
+- [OWNER_GUIDE/CTI_SERVER_USAGE.md](OWNER_GUIDE/CTI_SERVER_USAGE.md) - API reference
+- [Sandbox_Testing_Guide.md](Sandbox_Testing_Guide.md) - Development testing
+
+---
+
+## �🚀 Quick Start
 
 ### Prerequisites
 
@@ -47,23 +71,42 @@ DB_USER=postgres
 DB_PASSWORD=your-password
 DB_NAME=CTI
 
-# Dialpad OAuth (Sandbox)
-DIALPAD_SANDBOX_CLIENT_ID=your-client-id
-DIALPAD_SANDBOX_CLIENT_SECRET=your-client-secret
-DIALPAD_SANDBOX_REDIRECT_URI=https://localhost:4000/auth/dialpad/callback
-
-# Dialpad OAuth (Production)
-DIALPAD_PROD_CLIENT_ID=your-prod-client-id
-DIALPAD_PROD_CLIENT_SECRET=your-prod-client-secret
-DIALPAD_PROD_REDIRECT_URI=https://your-domain.com/auth/dialpad/callback
+# ⭐ PRIMARY: Dialpad API Key (for single Dialpad organization)
+# Get from Dialpad Settings > Integrations > API
+DIALPAD_API_KEY=your-dialpad-api-key
 
 # Webhooks & Security
 DIALPAD_WEBHOOK_SECRET=your-webhook-secret
 INTERNAL_API_SECRET=your-internal-api-secret
 
-# OAuth Scopes
-DIALPAD_SCOPES=calls:list recordings_export offline_access
+# Server URLs
+DIALPAD_PROD_REDIRECT_URI=https://localhost:4000  # or your Render domain in production
+
+# ⚠️ OPTIONAL: Dialpad OAuth (only needed if supporting multiple Dialpad orgs)
+# DIALPAD_SANDBOX_CLIENT_ID=your-client-id
+# DIALPAD_SANDBOX_CLIENT_SECRET=your-client-secret
+# DIALPAD_SANDBOX_REDIRECT_URI=https://localhost:4000/auth/dialpad/callback
 ```
+
+**Key Configuration Notes:**
+
+- **`DIALPAD_API_KEY`**: Your Dialpad admin API key (primary method)
+  - Get from Dialpad Settings > Admin > Integrations > API
+  - Server uses this for all Dialpad API calls
+  - Perfect for single-organization setup
+
+- **`DIALPAD_WEBHOOK_SECRET`**: Secret for webhook signature verification
+  - Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+  - Must match webhook secret configured in Dialpad
+  - Never commit to git
+
+- **`INTERNAL_API_SECRET`**: Secret for internal management endpoints
+  - Used to authenticate admin API calls
+  - Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+  - Required for app creation, webhook creation, API key management
+
+- **OAuth credentials** (optional): Only needed if you want to support multiple Dialpad organizations
+  - Most deployments use the API key approach instead
 
 ### 3. Start the Server
 

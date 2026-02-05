@@ -42,8 +42,9 @@ const pool = new Pool({
   // Enable a simple SSL option when DB_SSL=true. For production, provide
   // a proper SSL configuration and certificate verification as needed.
   ssl:
-    process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+   { rejectUnauthorized: false},
 });
+
 
 // Log unexpected errors emitted by a client in the pool.
 pool.on("error", (err) => {
@@ -64,7 +65,7 @@ async function testConnection() {
   }
 }
 
-// Default export is the pool for convenience; also export named bindings.
+// Default export is the pool for convenience; also export named bindings
 export default pool;
 export { pool, testConnection };
 

@@ -363,7 +363,7 @@ Secrets manager (AWS/Azure/Vault)
 # rotate_all_keys.sh - Rotate keys for multiple apps
 
 INTERNAL_SECRET="${INTERNAL_API_SECRET}"
-CTI_URL="${CTI_SERVER_URL:-http://localhost:4000}"
+CTI_URL="${DIALPAD_PROD_REDIRECT_URI:-http://localhost:4000}"
 APPS=(
   "550e8400-e29b-41d4-a716-446655440000"
   "550e8400-e29b-41d4-a716-446655440001"
