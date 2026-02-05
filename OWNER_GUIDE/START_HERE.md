@@ -346,5 +346,6 @@ Refer to the documentation:
 - Feature questions? → [COMPLETE_FEATURE_SUMMARY.md](COMPLETE_FEATURE_SUMMARY.md)
 - API questions? → [OWNER_GUIDE/CTI_SERVER_USAGE.md](OWNER_GUIDE/CTI_SERVER_USAGE.md)
 - Architecture details? → [OWNER_GUIDE/INTEGRATION_ARCHITECTURE.md](OWNER_GUIDE/INTEGRATION_ARCHITECTURE.md)
+- built with love oluwatimileyinadeosun@gmail.com
 
 **Welcome to production! 🎯**
