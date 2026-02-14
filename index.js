@@ -9,6 +9,7 @@ import dialpadAuthRouter from "./routes/dialpadAuth.js";
 import webhooksRouter from "./routes/webhooks.js";
 import callsRouter from "./routes/calls.js";
 import messagesRouter from "./routes/messages.js";
+import voicemailsRouter from "./routes/voicemails.js";
 import internalRouter from "./routes/internal.js";
 
 // Import event processing
@@ -221,6 +222,9 @@ app.use("/api/calls", apiLimiter, callsRouter);
 
 // Messages API (read-only, API key authenticated, rate limited)
 app.use("/api/messages", apiLimiter, messagesRouter);
+
+// Voicemails API (read-only, API key authenticated, rate limited)
+app.use("/api/voicemails", apiLimiter, voicemailsRouter);
 
 // Internal routes (protected by auth + rate limited)
 app.use("/internal", internalLimiter, internalRouter);

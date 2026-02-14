@@ -230,6 +230,17 @@ GET /api/calls/active
 Headers: x-app-api-key: <your-api-key>
 ```
 
+### Voicemails & Playback
+
+- `GET /api/voicemails` returns a paginated list of voicemail records for your app.
+- Each voicemail includes a `recording_url` field that your frontend can play directly, for example:
+
+  ```html
+  <audio controls src="https://.../some-voicemail-recording.mp3"></audio>
+  ```
+
+- You can also fetch a single voicemail with `GET /api/voicemails/:id` (same headers) to get the full record for one item.
+
 ---
 
 ## Important Notes
